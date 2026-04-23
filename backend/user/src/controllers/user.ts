@@ -6,9 +6,11 @@ import { User } from "../model/user.js";
 import { publishToQueue } from "./rabbitmq.js";
 
 export const loginUser = TryCatch(async (req, res) => {
+  console.log("1. request start");
   const { email } = req.body;
   const rateLimitKey = `otp:ratelimit:${email}`;
   const rateLimit = await redisClient.get(rateLimitKey);
+  console.log("2. redis get done");
   if (rateLimit) {
     res.status(429).json({
       message: "Too many requests. Please wait before requesting new OTP",
@@ -21,8 +23,10 @@ export const loginUser = TryCatch(async (req, res) => {
   const otpKey = `otp:${email}`;
 
   await redisClient.set(otpKey, otp, { EX: 300 });
+  console.log("3. redis set done");
 
   await redisClient.set(rateLimitKey, "true", { EX: 60 });
+  console.log("4. rate limit set done");
 
   const message = {
     to: email,
@@ -31,6 +35,7 @@ export const loginUser = TryCatch(async (req, res) => {
   };
 
   await publishToQueue("send-otp", message);
+  console.log("5. rabbitmq done");
 
   res.status(200).json({
     message: "OTP sent to your mail",
